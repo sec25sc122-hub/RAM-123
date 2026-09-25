@@ -4,6 +4,10 @@ import mongoose from 'mongoose'
 
 const port = Number(process.env.PORT || 4000)
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 
 if (!mongoUri) {
   console.error('Missing MongoDB connection string. Set MONGO_URI or MONGODB_URI in server/.env')
@@ -32,24 +36,40 @@ const studentSchema = new mongoose.Schema(
 
 const Student = mongoose.model('Student', studentSchema)
 
-const sendJson = (response, status, payload) => {
-  response.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': 'http://localhost:5173',
+const getCorsHeaders = (request) => {
+  const requestOrigin = request.headers.origin
+  const allowAnyOrigin = configuredCorsOrigins.length === 0
+  const originAllowed =
+    allowAnyOrigin || (requestOrigin && configuredCorsOrigins.includes(requestOrigin))
+
+  return {
+    ...(originAllowed && {
+      'Access-Control-Allow-Origin': allowAnyOrigin ? '*' : requestOrigin,
+    }),
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  }
+}
+
+const sendJson = (request, response, status, payload) => {
+  response.writeHead(status, {
+    'Content-Type': 'application/json',
+    ...getCorsHeaders(request),
   })
   response.end(JSON.stringify(payload))
 }
 
 const server = createServer((request, response) => {
   if (request.method === 'OPTIONS') {
-    sendJson(response, 204, {})
+    response.writeHead(204, getCorsHeaders(request))
+    response.end()
     return
   }
 
   if (request.method === 'GET' && request.url === '/') {
-    sendJson(response, 200, {
+    sendJson(request, response, 200, {
       name: 'CampusPath API',
       status: 'ok',
       endpoints: {
@@ -61,7 +81,7 @@ const server = createServer((request, response) => {
   }
 
   if (request.method === 'GET' && request.url === '/api/health') {
-    sendJson(response, 200, {
+    sendJson(request, response, 200, {
       status: mongoose.connection.readyState === 1 ? 'ok' : 'disconnected',
     })
     return
@@ -71,10 +91,10 @@ const server = createServer((request, response) => {
     Student.find()
       .sort({ registeredAt: 1 })
       .lean()
-      .then((registrations) => sendJson(response, 200, registrations))
+      .then((registrations) => sendJson(request, response, 200, registrations))
       .catch((error) => {
         console.error('Failed to load registrations:', error)
-        sendJson(response, 500, { error: 'Failed to load registrations' })
+        sendJson(request, response, 500, { error: 'Failed to load registrations' })
       })
     return
   }
@@ -88,24 +108,24 @@ const server = createServer((request, response) => {
       try {
         const registration = JSON.parse(body)
         if (!registration.name || !Array.isArray(registration.companies)) {
-          sendJson(response, 400, { error: 'Invalid registration payload' })
+          sendJson(request, response, 400, { error: 'Invalid registration payload' })
           return
         }
         Student.create(registration)
-          .then((savedRegistration) => sendJson(response, 201, savedRegistration.toObject()))
+          .then((savedRegistration) => sendJson(request, response, 201, savedRegistration.toObject()))
           .catch((error) => {
             console.error('Failed to save registration:', error)
-            sendJson(response, 500, { error: 'Failed to save registration' })
+            sendJson(request, response, 500, { error: 'Failed to save registration' })
           })
       } catch (error) {
         console.error('Invalid registration JSON:', error)
-        sendJson(response, 400, { error: 'Request body must be valid JSON' })
+        sendJson(request, response, 400, { error: 'Request body must be valid JSON' })
       }
     })
     return
   }
 
-  sendJson(response, 404, { error: 'Route not found' })
+  sendJson(request, response, 404, { error: 'Route not found' })
 })
 
 if (mongoUri) {

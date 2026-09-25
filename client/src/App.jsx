@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || ' https://ram-db.onrender.com'
+const API_URL = (import.meta.env.VITE_API_URL || 'https://ram-db.onrender.com')
+  .trim()
+  .replace(/\/+$/, '')
 
 const companies = [
   { name: 'Google', color: '#4285f4', mark: 'G' },

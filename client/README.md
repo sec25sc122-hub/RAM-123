@@ -1,5 +1,12 @@
 # React + Vite
 
+## Deployment environment
+
+Set `VITE_API_URL` in the client deployment environment to the deployed API URL, for example
+`https://ram-db.onrender.com`. The API accepts all origins by default because it does not use
+credentials. To restrict access, set `CORS_ORIGINS` (or `CLIENT_ORIGIN`) on the server to a
+comma-separated list of allowed frontend origins, such as `https://your-frontend.example.com`.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
